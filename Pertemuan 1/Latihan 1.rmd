@@ -1,4 +1,8 @@
-```         
+```{r}
+x=1000
+x
+
+
 ```
 
-![](images/screenshot 2025-06-08 110943-01.png){r} x=8 x
+![](images/Screenshot 2025-08-13 135807-01.png)

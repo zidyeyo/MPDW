@@ -1,0 +1,270 @@
+---
+title: "Praktikum 2"
+author: "Ibnu Yazid M0401241072"
+date: "2026-08-27"
+output:
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+---
+
+```{r}
+library(dplyr)
+library(TTR)
+library(forecast)
+library(lmtest) #digunakan untuk uji formal pendeteksian autokorelasi
+library(orcutt) #untuk membuat model regresi Cochrane-Orcutt
+library(HoRM) #untuk membuat model regresi Hildreth-Lu
+```
+
+## Nomor 1
+
+```{r}
+period1 <- 1:20
+market_share <- c(3.63, 4.20, 3.33, 4.54, 2.89, 4.87, 4.90, 5.29, 6.18, 7.20,
+                  7.25, 6.09, 6.80, 8.65, 8.43, 8.29, 7.18, 7.90, 8.45, 8.23)
+price <- c(0.97, 0.95, 0.99, 0.91, 0.98, 0.90, 0.89, 0.86, 0.85, 0.82,
+           0.79, 0.83, 0.81, 0.77, 0.76, 0.80, 0.83, 0.79, 0.76, 0.78)
+
+dtData1 <- data.frame(Period = period1, MarketShare = market_share, Price = price)
+dtData1
+```
+
+
+```{r}
+data.ts <- ts(dtData1$MarketShare)
+data.ts
+
+ts.plot(data.ts, xlab="Period", ylab="Market Share", main="Time Series Plot of Market Share")
+points(data.ts)
+```
+
+
+```{r}
+plot(dtData1$Price, dtData1$MarketShare, pch = 20, col = "blue",
+     main = "Scatter Plot Price vs Market Share",
+     xlab = "Price",
+     ylab = "Market Share")
+
+cor(dtData1$Price, dtData1$MarketShare)
+```
+
+```{r}
+model <- lm(MarketShare ~ Price, data = dtData1)
+summary(model)
+```
+
+```{r}
+sisaan <- residuals(model)
+fitValue <- predict(model)
+
+par(mfrow = c(2,2))
+qqnorm(sisaan)
+qqline(sisaan, col = "steelblue", lwd = 2)
+plot(fitValue, sisaan, col = "steelblue", pch = 20, xlab = "Fitted Values", ylab = "Sisaan", main = "Sisaan vs Fitted Values")
+abline(a = 0, b = 0, lwd = 2)
+hist(sisaan, col = "steelblue")
+plot(seq(1,20,1), sisaan, col = "steelblue", pch = 20, xlab = "Order", ylab = "Sisaan", main = "Sisaan vs Order")
+lines(seq(1,20,1), sisaan, col = "red")
+abline(a = 0, b = 0, lwd = 2)
+```
+
+```{r}
+par(mfrow = c(1,2))
+acf(sisaan)
+pacf(sisaan)
+```
+
+```{r}
+dwtest(model)
+```
+
+
+```{r}
+modelCO <- cochrane.orcutt(model)
+modelCO
+
+rho <- modelCO$rho
+rho
+```
+
+
+```{r}
+y.trans <- dtData1$MarketShare[-1] - dtData1$MarketShare[-20] * rho
+x.trans <- dtData1$Price[-1] - dtData1$Price[-20] * rho
+modelCOmanual <- lm(y.trans ~ x.trans)
+
+b0bintang <- modelCOmanual$coefficients[1]
+b0 <- b0bintang / (1 - rho)
+b1 <- modelCOmanual$coefficients[2]
+b0
+b1
+```
+
+```{r}
+hildreth.lu.func <- function(r, model){
+  x <- model.matrix(model)[,-1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t] - r * y[t-1]
+  x <- x[t] - r * x[t-1]
+  return(lm(y ~ x))
+}
+
+rOpt <- seq(0.1, 0.9, by = 0.001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model))}))
+rho_best <- tabOpt[which.min(tabOpt$SSE), "rho"]
+rho_best
+
+modelHL <- hildreth.lu.func(rho_best, model)
+summary(modelHL)
+
+dwtest(modelHL)
+```
+
+```{r}
+sseModelawal <- anova(model)$`Sum Sq`[2]
+sseModelCO <- deviance(modelCOmanual)
+sseModelHL <- deviance(modelHL)
+
+mseModelawal <- sseModelawal / length(dtData1$MarketShare)
+mseModelCO <- sseModelCO / length(dtData1$MarketShare)
+mseModelHL <- sseModelHL / length(dtData1$MarketShare)
+
+akurasi <- matrix(c(sseModelawal, sseModelCO, sseModelHL,
+                    mseModelawal, mseModelCO, mseModelHL), nrow=2, ncol=3, byrow = T)
+colnames(akurasi) <- c("Model Awal", "Cochrane-Orcutt", "Hildreth-Lu")
+row.names(akurasi) <- c("SSE", "MSE")
+akurasi
+```
+
+
+## Nomor 2
+
+```{r}
+tahun_sales <- 1975:2014
+data_sales <- c(11.7, 12.0, 12.3, 12.8, 13.1, 13.6, 13.9, 14.4, 14.7, 15.3,
+                 15.5, 15.8, 16.1, 16.6, 16.9, 16.7, 16.9, 17.4, 17.6, 17.9,
+                 18.0, 17.9, 18.0, 18.2, 18.2, 18.3, 18.6, 19.2, 19.3, 19.5,
+                 19.2, 19.3, 19.5, 20.0, 20.0, 19.9, 19.8, 19.9, 20.2, 21.0)
+data_adv <- c(9.4, 9.6, 10, 10.4, 10.8, 10.9, 11.7, 12.2, 12.5, 12.9,
+               13.0, 13.2, 13.8, 14.2, 14.6, 14.4, 15.0, 15.4, 15.7, 15.9,
+               15.9, 16.0, 16.3, 16.2, 16.8, 17.3, 17.6, 18.1, 18.3, 18.5,
+               18.7, 18.9, 19.2, 20.0, 20.0, 20.3, 20.4, 21.0, 21.5, 22.1)
+
+dtSales <- data.frame(Tahun = tahun_sales, Sales = data_sales, Advertising = data_adv)
+dtSales
+```
+
+```{r}
+sales.ts <- ts(dtSales$Sales)
+
+ts.plot(sales.ts, xlab="Period", ylab="Sales", main="Time Series Plot of Sales")
+points(sales.ts)
+
+plot(dtSales$Advertising, dtSales$Sales, pch = 20, col = "blue",
+     main = "Scatter Plot Advertising vs Sales",
+     xlab = "Advertising",
+     ylab = "Sales")
+cor(dtSales$Advertising, dtSales$Sales)
+```
+
+```{r}
+model_sales <- lm(Sales ~ Advertising, data = dtSales)
+summary(model_sales)
+```
+
+```{r}
+sisaan_sales <- residuals(model_sales)
+fit_sales <- predict(model_sales)
+
+par(mfrow = c(2,2))
+qqnorm(sisaan_sales)
+qqline(sisaan_sales, col = "steelblue", lwd = 2)
+plot(fit_sales, sisaan_sales, col = "steelblue", pch = 20, xlab = "Fitted Values", ylab = "Sisaan", main = "Sisaan vs Fitted Values")
+abline(a = 0, b = 0, lwd = 2)
+hist(sisaan_sales, col = "steelblue")
+plot(seq(1, length(sisaan_sales), 1), sisaan_sales, col = "steelblue", pch = 20, xlab = "Order", ylab = "Sisaan", main = "Sisaan vs Order")
+lines(seq(1, length(sisaan_sales), 1), sisaan_sales, col = "red")
+abline(a = 0, b = 0, lwd = 2)
+```
+
+```{r}
+par(mfrow = c(1,2))
+acf(sisaan_sales)
+pacf(sisaan_sales)
+
+dwtest(model_sales)
+```
+
+```{r}
+modelCO_sales <- cochrane.orcutt(model_sales)
+modelCO_sales
+
+rho_sales_co <- modelCO_sales$rho
+rho_sales_co
+
+sales.trans <- dtSales$Sales[-1] - dtSales$Sales[-length(dtSales$Sales)] * rho_sales_co
+adv.trans <- dtSales$Advertising[-1] - dtSales$Advertising[-length(dtSales$Advertising)] * rho_sales_co
+
+modelCOmanual_sales <- lm(sales.trans ~ adv.trans)
+summary(modelCOmanual_sales)
+
+b0_sales_co <- modelCOmanual_sales$coefficients[1] / (1 - rho_sales_co)
+b1_sales_co <- modelCOmanual_sales$coefficients[2]
+b0_sales_co
+b1_sales_co
+```
+
+```{r}
+hildreth.lu.func <- function(r, model){
+  x <- model.matrix(model)[,-1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t] - r * y[t-1]
+  x <- x[t] - r * x[t-1]
+  return(lm(y ~ x))
+}
+
+rOpt_sales <- seq(0.1, 0.9, by = 0.001)
+tabOpt_sales <- data.frame("rho" = rOpt_sales, "SSE" = sapply(rOpt_sales, function(i){deviance(hildreth.lu.func(i, model_sales))}))
+
+rho_opt_sales <- tabOpt_sales[which.min(tabOpt_sales$SSE), "rho"]
+rho_opt_sales
+
+modelHL_sales <- hildreth.lu.func(rho_opt_sales, model_sales)
+summary(modelHL_sales)
+
+dwtest(modelHL_sales)
+```
+
+```{r}
+sse_awal_sales <- deviance(model_sales)
+sse_co_sales   <- deviance(modelCOmanual_sales)
+sse_hl_sales   <- deviance(modelHL_sales)
+
+n_sales <- nrow(dtSales)
+mse_awal_sales <- sse_awal_sales / n_sales
+mse_co_sales   <- sse_co_sales / n_sales
+mse_hl_sales   <- sse_hl_sales / n_sales
+
+akurasi_sales <- matrix(c(sse_awal_sales, sse_co_sales, sse_hl_sales,
+                          mse_awal_sales, mse_co_sales, mse_hl_sales), 
+                        nrow = 2, ncol = 3, byrow = TRUE)
+
+colnames(akurasi_sales) <- c("Model Awal", "Cochrane-Orcutt", "Hildreth-Lu")
+row.names(akurasi_sales) <- c("SSE", "MSE")
+akurasi_sales
+```
+
+## Kesimpulan
+
+Berdasarkan analisis regresi deret waktu pada Data 1 (Market Share vs Price), model regresi awal terdeteksi mengalami masalah autokorelasi positif berdasarkan uji Durbin-Watson dengan statistik DW = 1.1358 dan p-value = 0.009813 (kurang dari 0.05). Setelah dilakukan penanganan menggunakan metode Cochrane-Orcutt dan Hildreth-Lu, masalah autokorelasi berhasil diatasi yang ditunjukkan oleh peningkatan nilai statistik DW menjadi 1.9577 dengan p-value = 0.4148 (lebih besar dari 0.05). Kedua metode penanganan menghasilkan performa yang sepadan dan terbukti jauh lebih baik dibanding model awal, dengan penurunan nilai SSE dari 3.3082574 menjadi sekitar 2.659368 dan MSE dari 0.1654129 menjadi 0.1329684.
+
+Sementara itu, pada Data 2 (Sales vs Advertising), model regresi awal juga terdeteksi mengalami autokorelasi positif yang sangat signifikan dengan statistik DW = 0.16204 dan p-value kurang dari 2.2e-16. Penanganan autokorelasi dengan metode Hildreth-Lu berhasil memulihkan asumsi kebebasan sisaan, ditandai dengan nilai statistik DW yang meningkat tajam menjadi 1.9402 dan p-value = 0.3782. Secara keseluruhan, metode Cochrane-Orcutt dan Hildreth-Lu mampu meningkatkan presisi pemodelan Data 2 secara drastis, menurunkan nilai SSE dari 10.5545322 menjadi sekitar 1.2912254 (Cochrane-Orcutt) dan 1.2913949 (Hildreth-Lu), serta memangkas nilai MSE dari 0.2638633 menjadi sekitar 0.03228.
+

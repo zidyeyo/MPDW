@@ -1,0 +1,209 @@
+---
+title: "Praktikum 3"
+author: "Ibnu Yazid M0401241072"
+date: "2026-09-09"
+output: html_document
+---
+
+```{r}
+library(dLagM)
+library(dynlm)
+library(MLmetrics)
+library(lmtest)
+library(car)
+```
+
+
+## Data 1
+
+```{r}
+# Input Data Latihan 1
+dt1 <- data.frame(
+  Period = 1:20,
+  Market_Share = c(3.63, 4.20, 3.33, 4.54, 2.89, 4.87, 4.90, 5.29, 6.18, 7.20,
+                  7.25, 6.09, 6.80, 8.65, 8.43, 8.29, 7.18, 7.90, 8.45, 8.23),
+  Price = c(0.97, 0.95, 0.99, 0.91, 0.98, 0.90, 0.89, 0.86, 0.85, 0.82,
+            0.79, 0.83, 0.81, 0.77, 0.76, 0.80, 0.83, 0.79, 0.76, 0.78)
+)
+
+# Pembagian Train (1-15) dan Test (16-20)
+train1 <- dt1[1:15, ]
+test1  <- dt1[16:20, ]
+```
+
+
+```{r}
+koyck1 <- koyckDlm(x = train1$Price, y = train1$Market_Share)
+summary(koyck1)
+
+fore.koyck1 <- forecast(model = koyck1, x = test1$Price, h = 5)
+mape.koyck1 <- MAPE(fore.koyck1$forecasts, test1$Market_Share)
+```
+
+
+```{r}
+# Cari Lag Optimum menggunakan perulangan AIC
+aic_val1 <- vector()
+for(q in 1:3) {
+  fit <- dlm(x = train1$Price, y = train1$Market_Share, q = q)
+  aic_val1[q] <- AIC(fit$model)
+}
+
+# Ambil lag dengan nilai AIC terkecil
+q_best1 <- which.min(aic_val1) 
+
+# Pemodelan DLM Optimum
+dlm1 <- dlm(x = train1$Price, y = train1$Market_Share, q = q_best1)
+summary(dlm1)
+
+fore.dlm1 <- forecast(model = dlm1, x = test1$Price, h = 5)
+mape.dlm1 <- MAPE(fore.dlm1$forecasts, test1$Market_Share)
+```
+
+
+```{r}
+# Pemodelan ARDL (p=1, q=1) menggunakan formula
+ardl1 <- ardlDlm(formula = Market_Share ~ Price, data = train1, p = 1, q = 1)
+summary(ardl1)
+
+# Peramalan dan perhitungan MAPE
+fore.ardl1 <- forecast(model = ardl1, x = test1$Price, h = 5)
+mape.ardl1 <- MAPE(fore.ardl1$forecasts, test1$Market_Share)
+```
+
+
+```{r}
+eval1 <- data.frame(
+  Model = c("Koyck", paste("DLM (q =", q_best1, ")"), "ARDL (p=1, q=1)"),
+  MAPE = c(mape.koyck1, mape.dlm1, mape.ardl1)
+)
+eval1
+```
+
+
+```{r}
+# Atur layout grafik
+par(mfrow = c(1,1))
+
+# Plot data aktual (Test Data)
+plot(test1$Period, test1$Market_Share, type = "b", col = "#2B2D42", lwd = 2, pch = 16,
+     ylim = c(min(test1$Market_Share) - 1, max(test1$Market_Share) + 1),
+     xlab = "Periode", ylab = "Market Share", main = "Perbandingan Hasil Peramalan - Latihan 1")
+
+# Tambahkan garis hasil ramalan tiap model dengan warna pastel
+points(test1$Period, fore.koyck1$forecasts, col = "#FF9AA2", pch = 16)
+lines(test1$Period, fore.koyck1$forecasts, col = "#FF9AA2", lty = 2, lwd = 2)
+
+points(test1$Period, fore.dlm1$forecasts, col = "#00A896", pch = 16) # Pastel Mint/Teal
+lines(test1$Period, fore.dlm1$forecasts, col = "#00A896", lty = 2, lwd = 2)
+
+points(test1$Period, fore.ardl1$forecasts, col = "#B5EAD7", pch = 16) # Pastel Sage Green
+lines(test1$Period, fore.ardl1$forecasts, col = "#B5EAD7", lty = 2, lwd = 2)
+
+# Legenda
+legend("bottomright",
+       c("Aktual", "Koyck", paste("DLM (q =", q_best1, ")"), "ARDL (1,1)"),
+       lty = c(1, 2, 2, 2), col = c("#2B2D42", "#FF9AA2", "#00A896", "#B5EAD7"),
+       pch = 16, cex = 0.8, lwd = 2, bty = "n")
+```
+
+Berdasarkan evaluasi nilai kesalahan peramalan Data 1, Model Koyck terbukti menjadi model terbaik karena menghasilkan nilai MAPE terkecil yaitu sebesar 0.0531 (atau sekitar 5.31%), diikuti oleh model DLM dengan q = 3 sebesar 0.0640 (6.40%) dan model ARDL (1,1) sebesar 0.0665 (6.65%). Meskipun pada plot perbandingan visual garis model DLM tampak mengikuti pergerakan pola naik-turun data aktual secara lebih dinamis, Model Koyck secara konsisten memberikan selisih deviasi nilai peramalan yang paling minim dan stabil terhadap data aktual dalam jangka panjang, sehingga sangat ideal untuk digunakan dalam peramalan Market Share.
+
+
+## Data 2
+
+```{r}
+# Input Data Latihan 2
+dt2 <- data.frame(
+  Year = 1975:2014,
+  Sales = c(11.7, 12.0, 12.3, 12.8, 13.1, 13.6, 13.9, 14.4, 14.7, 15.3,
+            15.5, 15.8, 16.1, 16.6, 16.9, 16.7, 16.9, 17.4, 17.6, 17.9,
+            18.0, 17.9, 18.0, 18.2, 18.2, 18.3, 18.6, 19.2, 19.3, 19.5,
+            19.2, 19.3, 19.5, 20.0, 20.0, 19.9, 19.8, 19.9, 20.2, 21.0),
+  Advertising = c(9.4, 9.6, 10.0, 10.4, 10.8, 10.9, 11.7, 12.2, 12.5, 12.9,
+                  13.0, 13.2, 13.8, 14.2, 14.6, 14.4, 15.0, 15.4, 15.7, 15.9,
+                  15.9, 16.0, 16.3, 16.2, 16.8, 17.3, 17.6, 18.1, 18.3, 18.5,
+                  18.7, 18.9, 19.2, 20.0, 20.0, 20.3, 20.4, 21.0, 21.5, 22.1)
+)
+
+# Pembagian Train (30 periode awal) dan Test (10 periode akhir)
+train2 <- dt2[1:30, ]
+test2  <- dt2[31:40, ]
+```
+
+
+```{r}
+koyck2 <- koyckDlm(x = train2$Advertising, y = train2$Sales)
+summary(koyck2)
+
+fore.koyck2 <- forecast(model = koyck2, x = test2$Advertising, h = 10)
+mape.koyck2 <- MAPE(fore.koyck2$forecasts, test2$Sales)
+```
+
+
+```{r}
+# Cari Lag Optimum menggunakan perulangan AIC
+aic_val2 <- vector()
+for(q in 1:5) {
+  fit <- dlm(x = train2$Advertising, y = train2$Sales, q = q)
+  aic_val2[q] <- AIC(fit$model)
+}
+
+# Ambil lag dengan nilai AIC terkecil
+q_best2 <- which.min(aic_val2)
+
+# Pemodelan DLM Optimum
+dlm2 <- dlm(x = train2$Advertising, y = train2$Sales, q = q_best2)
+summary(dlm2)
+
+fore.dlm2 <- forecast(model = dlm2, x = test2$Advertising, h = 10)
+mape.dlm2 <- MAPE(fore.dlm2$forecasts, test2$Sales)
+```
+
+
+```{r}
+# Pemodelan ARDL (p=1, q=1) menggunakan formula
+ardl2 <- ardlDlm(formula = Sales ~ Advertising, data = train2, p = 1, q = 1)
+summary(ardl2)
+
+# Peramalan dan perhitungan MAPE
+fore.ardl2 <- forecast(model = ardl2, x = test2$Advertising, h = 10)
+mape.ardl2 <- MAPE(fore.ardl2$forecasts, test2$Sales)
+```
+
+
+```{r}
+eval2 <- data.frame(
+  Model = c("Koyck", paste("DLM (q =", q_best2, ")"), "ARDL (p=1, q=1)"),
+  MAPE = c(mape.koyck2, mape.dlm2, mape.ardl2)
+)
+eval2
+```
+
+```{r}
+# Atur layout grafik
+par(mfrow = c(1,1))
+
+# Plot data aktual (Test Data)
+plot(test2$Year, test2$Sales, type = "b", col = "#2B2D42", lwd = 2, pch = 16,
+     ylim = c(min(test2$Sales) - 1, max(test2$Sales) + 1),
+     xlab = "Tahun", ylab = "Sales", main = "Perbandingan Hasil Peramalan - Latihan 2")
+
+# Tambahkan garis hasil ramalan tiap model dengan warna pastel
+points(test2$Year, fore.koyck2$forecasts, col = "#FF9AA2", pch = 16)
+lines(test2$Year, fore.koyck2$forecasts, col = "#FF9AA2", lty = 2, lwd = 2)
+
+points(test2$Year, fore.dlm2$forecasts, col = "#00A896", pch = 16)
+lines(test2$Year, fore.dlm2$forecasts, col = "#00A896", lty = 2, lwd = 2)
+
+points(test2$Year, fore.ardl2$forecasts, col = "#B5EAD7", pch = 16)
+lines(test2$Year, fore.ardl2$forecasts, col = "#B5EAD7", lty = 2, lwd = 2)
+
+# Legenda
+legend("topleft",
+       c("Aktual", "Koyck", paste("DLM (q =", q_best2, ")"), "ARDL (1,1)"),
+       lty = c(1, 2, 2, 2), col = c("#2B2D42", "#FF9AA2", "#00A896", "#B5EAD7"),
+       pch = 16, cex = 0.8, lwd = 2, bty = "n")
+```
+
+Berdasarkan evaluasi nilai kesalahan peramalan pada Latihan 2, Model Koyck terbukti menjadi model terbaik karena menghasilkan nilai MAPE paling rendah yaitu sebesar 0.0471 (atau sekitar 4.71%), diikuti oleh model ARDL (1,1) sebesar 0.0485 (4.85%) dan model DLM dengan q = 5 sebesar 0.0498 (4.98%). Secara visual, ketiga model menunjukkan pergerakan tren naik yang serupa dan berada sedikit di atas nilai aktual, tetapi Model Koyck secara keseluruhan memiliki tingkat akurasi yang paling tinggi sehingga sangat direkomendasikan untuk memprediksi tingkat penjualan (Sales) berbasis variabel pengeluaran iklan (Advertising).

@@ -1,0 +1,236 @@
+---
+title: "Tugas-Pertemuan-5"
+author: "Ibnu Yazid M0401241072"
+date: "2026-09-17"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+---
+
+
+## Nomor 1 (MA)
+
+```{r}
+library(TSA)
+library(ggplot2)
+library(tsibble)
+
+set.seed(8990)
+
+n <- 300
+theta1 <- 0.4
+theta2 <- 0.6
+
+e <- rnorm(n + 2, mean = 0, sd = 1)
+ma2_manual <- numeric(n)
+
+for (t in 1:n) {
+  ma2_manual[t] <- e[t + 2] + theta1 * e[t + 1] + theta2 * e[t]
+}
+ma2_manual <- ts(ma2_manual)
+ma2_sim <- arima.sim(n = n, list(order = c(0,0,2), ma = c(theta1, theta2)))
+
+ma2_sim |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line(color = "steelblue") +
+  theme_bw() +
+  labs(title = "Plot Time Series MA(2)", x = "Obs", y = "Nilai")
+
+acf(ma2_sim, main = "Plot ACF MA(2)")
+pacf(ma2_sim, main = "Plot PACF MA(2)")
+eacf(ma2_sim)
+
+
+yt   <- ma2_sim[4:n]
+yt1  <- ma2_sim[3:(n-1)]
+yt2  <- ma2_sim[2:(n-2)]
+yt3  <- ma2_sim[1:(n-3)]
+
+par(mfrow = c(1, 3))
+plot(yt1, yt, main = "Y_t vs Y_{t-1}", xlab = "Y_{t-1}", ylab = "Y_t", col = "darkblue", pch = 16)
+plot(yt2, yt, main = "Y_t vs Y_{t-2}", xlab = "Y_{t-2}", ylab = "Y_t", col = "darkred", pch = 16)
+plot(yt3, yt, main = "Y_t vs Y_{t-3}", xlab = "Y_{t-3}", ylab = "Y_t", col = "darkgreen", pch = 16)
+par(mfrow = c(1, 1))
+
+
+rho_sample <- acf(ma2_sim, plot = FALSE)$acf[1:4]
+
+# Autokorelasi Teoritis:
+# ρ_0 = 1
+# ρ_1 = (θ1 + θ1*θ2) / (1 + θ1^2 + θ2^2)
+# ρ_2 = θ2 / (1 + θ1^2 + θ2^2)
+# ρ_k = 0 untuk k >= 3
+
+denom <- 1 + theta1^2 + theta2^2
+rho0_theoretical <- 1
+rho1_theoretical <- (theta1 + theta1 * theta2) / denom
+rho2_theoretical <- theta2 / denom
+rho3_theoretical <- 0
+
+rho_theoretical <- c(rho0_theoretical, rho1_theoretical, rho2_theoretical, rho3_theoretical)
+
+# Perbandingan Hasil
+data.frame(
+  Lag = 0:3,
+  Teoritis = round(rho_theoretical, 4),
+  Sampel = round(rho_sample, 4)
+)
+```
+
+Berdasarkan hasil analisis dan visualisasi data bangkitan MA(2), plot time series menunjukkan bahwa data berfluktuasi secara acak di sekitar nilai tengah nol dengan varians yang relatif stabil sepanjang waktu, yang mengindikasikan bahwa data sudah stasioner. Karakteristik khas dari proses MA(2) terlihat jelas pada plot ACF yang terputus (cuts off) setelah lag ke-2, sementara plot PACF meluruh secara perlahan (tails off). Konfirmasi model MA(2) diperkuat oleh matriks EACF yang membentuk segitiga nol mulai dari baris AR = 0 dan kolom MA = 2, serta scatterplot yang menunjukkan adanya pola hubungan linier positif pada lag 1 dan lag 2, lalu menghilang pada lag 3.
+
+Hasil perbandingan autokorelasi menunjukkan konsistensi yang baik antara nilai teoritis dan sampel, di mana nilai autokorelasi secara signifikan bernilai positif pada lag 1 dan lag 2, kemudian mendekati nol pada lag 3 dan seterusnya. Secara keseluruhan, seluruh tahapan identifikasi mulai dari plot deret waktu, grafik ACF/PACF, matriks EACF, hingga scatterplot antar-lag secara konsisten membuktikan bahwa data bangkitan tersebut berhasil memenuhi dan mencerminkan sifat-sifat teoritis dari proses MA(2).
+
+
+## Nomor 2 (AR)
+
+```{r}
+library(TSA)
+library(ggplot2)
+library(tsibble)
+
+set.seed(8990)
+
+n <- 300
+phi1 <- 0.5
+phi2 <- 0.2
+
+burn_in <- 100 
+e <- rnorm(n + burn_in, mean = 0, sd = 1)
+y_raw <- numeric(n + burn_in)
+
+for (t in 3:(n + burn_in)) {
+  y_raw[t] <- phi1 * y_raw[t - 1] + phi2 * y_raw[t - 2] + e[t]
+}
+ar2_manual <- ts(y_raw[(burn_in + 1):(n + burn_in)])
+ar2_sim <- arima.sim(n = n, list(order = c(2,0,0), ar = c(phi1, phi2)))
+
+ar2_sim |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line(color = "steelblue") +
+  theme_bw() +
+  labs(title = "Plot Time Series AR(2)", x = "Obs", y = "Nilai")
+
+acf(ar2_sim, main = "Plot ACF AR(2)")
+pacf(ar2_sim, main = "Plot PACF AR(2)")
+eacf(ar2_sim)
+
+
+yt   <- ar2_sim[4:n]
+yt1  <- ar2_sim[3:(n-1)]
+yt2  <- ar2_sim[2:(n-2)]
+yt3  <- ar2_sim[1:(n-3)]
+
+par(mfrow = c(1, 3))
+plot(yt1, yt, main = "Y_t vs Y_{t-1}", xlab = "Y_{t-1}", ylab = "Y_t", col = "darkblue", pch = 16)
+plot(yt2, yt, main = "Y_t vs Y_{t-2}", xlab = "Y_{t-2}", ylab = "Y_t", col = "darkred", pch = 16)
+plot(yt3, yt, main = "Y_t vs Y_{t-3}", xlab = "Y_{t-3}", ylab = "Y_t", col = "darkgreen", pch = 16)
+par(mfrow = c(1, 1))
+
+
+
+rho_sample <- acf(ar2_sim, plot = FALSE)$acf[1:4]
+
+# Autokorelasi Teoritis (Persamaan Yule-Walker):
+# ρ_0 = 1
+# ρ_1 = phi1 / (1 - phi2)
+# ρ_2 = phi1 * ρ_1 + phi2 * ρ_0
+# ρ_3 = phi1 * ρ_2 + phi2 * ρ_1
+
+rho0_theoretical <- 1
+rho1_theoretical <- phi1 / (1 - phi2)
+rho2_theoretical <- phi1 * rho1_theoretical + phi2 * rho0_theoretical
+rho3_theoretical <- phi1 * rho2_theoretical + phi2 * rho1_theoretical
+
+rho_theoretical <- c(rho0_theoretical, rho1_theoretical, rho2_theoretical, rho3_theoretical)
+
+# Perbandingan Hasil
+data.frame(
+  Lag = 0:3,
+  Teoritis = round(rho_theoretical, 4),
+  Sampel = round(rho_sample, 4)
+)
+```
+
+Berdasarkan hasil visualisasi dan analisis data bangkitan AR(2), plot time series menunjukkan fluktuasi acak yang stabil di sekitar nilai rata-rata nol tanpa adanya tren, yang mengindikasikan bahwa data berada dalam kondisi stasioner. Sifat teoritis model AR(2) terlihat jelas dari pola autokorelasi, di mana grafik ACF meluruh secara perlahan (tails off) mengikuti pola eksponensial/sinusoidal teredam, sedangkan grafik PACF terputus secara signifikan (cuts off) tepat setelah lag ke-2. Kesesuaian ini diperkuat oleh matriks EACF yang menunjukkan sudut segitiga nol dimulai pada baris AR = 2 dan kolom MA = 0, serta scatterplot yang memperlihatkan pola linier positif kuat pada lag 1 dan lag 2.
+
+Tabel perbandingan autokorelasi antara nilai teoritis dan sampel juga menunjukkan nilai yang selaras dan meluruh secara bertahap seiring bertambahnya lag, yaitu pada lag 1 (teoritis 0.6250 vs sampel 0.5193), lag 2 (0.5125 vs 0.3846), dan lag 3 (0.3812 vs 0.2900). Secara keseluruhan, identifikasi melalui grafik deret waktu, ACF/PACF, matriks EACF, hingga tabel perbandingan nilai autokorelasi secara konsisten membuktikan bahwa data bangkitan tersebut berhasil memenuhi dan mencerminkan karakteristik dari proses AR(2).
+
+
+## Nomor 3 (ARMA)
+
+```{r}
+library(TSA)
+library(ggplot2)
+library(tsibble)
+
+set.seed(8990)
+
+
+
+n <- 300
+phi1 <- 0.5
+phi2 <- 0.2
+theta1 <- 0.4
+theta2 <- 0.6
+
+burn_in <- 100 
+e <- rnorm(n + burn_in, mean = 0, sd = 1)
+y_raw <- numeric(n + burn_in)
+
+for (t in 3:(n + burn_in)) {
+  y_raw[t] <- phi1 * y_raw[t - 1] + phi2 * y_raw[t - 2] + 
+              e[t] + theta1 * e[t - 1] + theta2 * e[t - 2]
+}
+arma22_manual <- ts(y_raw[(burn_in + 1):(n + burn_in)])
+
+arma22_sim <- arima.sim(n = n, list(order = c(2,0,2), 
+                                    ar = c(phi1, phi2), 
+                                    ma = c(theta1, theta2)))
+
+
+
+arma22_sim |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line(color = "steelblue") +
+  theme_bw() +
+  labs(title = "Plot Time Series ARMA(2,2)", x = "Obs", y = "Nilai")
+
+acf(arma22_sim, main = "Plot ACF ARMA(2,2)")
+pacf(arma22_sim, main = "Plot PACF ARMA(2,2)")
+eacf(arma22_sim)
+
+
+
+yt   <- arma22_sim[4:n]
+yt1  <- arma22_sim[3:(n-1)]
+yt2  <- arma22_sim[2:(n-2)]
+yt3  <- arma22_sim[1:(n-3)]
+
+par(mfrow = c(1, 3))
+plot(yt1, yt, main = "Y_t vs Y_{t-1}", xlab = "Y_{t-1}", ylab = "Y_t", col = "darkblue", pch = 16)
+plot(yt2, yt, main = "Y_t vs Y_{t-2}", xlab = "Y_{t-2}", ylab = "Y_t", col = "darkred", pch = 16)
+plot(yt3, yt, main = "Y_t vs Y_{t-3}", xlab = "Y_{t-3}", ylab = "Y_t", col = "darkgreen", pch = 16)
+par(mfrow = c(1, 1))
+
+
+
+# Autokorelasi Sampel
+rho_sample <- acf(arma22_sim, plot = FALSE)$acf[1:4]
+
+# Autokorelasi Teoritis menggunakan ARMAacf()
+rho_theoretical <- ARMAacf(ar = c(phi1, phi2), ma = c(theta1, theta2), lag.max = 3)
+
+# Perbandingan Hasil
+data.frame(
+  Lag = 0:3,
+  Teoritis = round(as.numeric(rho_theoretical), 4),
+  Sampel = round(as.numeric(rho_sample), 4)
+)
+```
+
+Berdasarkan hasil visualisasi dan analisis data bangkitan ARMA(2,2), plot time series menunjukkan bahwa data berfluktuasi secara acak di sekitar nilai tengah nol dengan ragam yang stabil sepanjang waktu, yang mengindikasikan bahwa data telah stasioner. Karakteristik gabungan ARMA(2,2) terlihat dari grafik ACF dan PACF yang keduanya meluruh secara perlahan (tails off). Identifikasi model ini diperkuat secara spesifik oleh matriks EACF yang membentuk sudut segitiga nol (lingkaran 'o') dimulai pada baris AR = 2 dan kolom MA = 2, serta scatterplot antar-lag yang menunjukkan adanya hubungan linier positif cukup kuat hingga lag ke-3.
+
+Hasil perbandingan nilai autokorelasi antara teoritis dan sampel juga menunjukkan pola yang selaras dan meluruh secara bertahap seiring bertambahnya lag, yaitu pada lag 1 (teoritis 0.8592 vs sampel 0.7466), lag 2 (0.7492 vs 0.5358), dan lag 3 (0.5464 vs 0.3805). Secara keseluruhan, seluruh tahapan identifikasi mulai dari plot deret waktu, grafik ACF/PACF, matriks EACF, hingga tabel perbandingan nilai autokorelasi secara konsisten membuktikan bahwa data bangkitan tersebut berhasil memenuhi dan mencerminkan sifat-sifat teoritis dari proses ARMA(2,2).

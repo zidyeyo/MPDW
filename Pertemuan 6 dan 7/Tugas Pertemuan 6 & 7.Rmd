@@ -1,0 +1,149 @@
+---
+title: "Tugas Pertemuan 6&7"
+author: "Ibnu Yazid M0401241072"
+date: "2026-09-30"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: readable
+---
+
+```{r}
+library(tsibble)
+library(tseries)
+library(forecast)
+library(ggplot2)
+library(TSA)
+library(rio)
+```
+
+### Data
+
+```{r}
+data <- import("C:/Users/Hype/OneDrive/文档/Semester 5/MPDW/MPDW/Pertemuan 1/MPDW Cabai merah.csv")
+head(data)
+
+data_100 <- data[1:100, ]
+data_ts <- ts(data_100$Harga)
+```
+
+
+```{r}
+plot.ts(data_ts, main = "Plot Deret Waktu Cabai Merah", ylab = "Harga", xlab = "Waktu", col = "blue")
+```
+
+
+```{r}
+n <- length(data_ts)
+n_train <- round(0.8 * n)
+
+train <- ts(data_ts[1:n_train])
+test <- ts(data_ts[(n_train + 1):n], start = n_train + 1)
+
+plot.ts(train, col = "black", main = "Pembagian Data Train dan Test", ylab = "Harga", xlab = "Waktu")
+lines(test, col = "red")
+legend("topleft", legend = c("Train", "Test"), col = c("black", "red"), lty = 1)
+```
+
+### Uji ADF
+
+```{r}
+adf.test(train)
+```
+
+Karena p-value (0.07219) > 0.05, maka gagal tolak H0. Artinya data train tidak stasioner.
+
+
+```{r}
+library(MASS)
+index <- seq_along(train)
+bc <- boxcox(train ~ index)
+
+lambda <- bc$x[which.max(bc$y)]
+lambda
+```
+
+
+### Differencing
+
+```{r}
+train_diff <- diff(train)
+
+plot.ts(train_diff, main = "Plot Data Train Differencing 1", ylab = "D(Harga)", col = "red")
+adf.test(train_diff)
+```
+
+Setelah dilakukan differencing (d=1), uji ADF p-value nya < 0.05 (0.01). Data sudah stasioner pada d=1.
+
+### Pemilihan model terbaik
+
+```{r}
+par(mfrow = c(1, 2))
+acf(train_diff, main = "ACF Data Differencing")
+pacf(train_diff, main = "PACF Data Differencing")
+par(mfrow = c(1, 1))
+
+eacf(train_diff)
+```
+
+ACF: Signifikan/keluar garis batas biru pada lag 1. 
+PACF: Signifikan/keluar garis batas biru pada lag 1 dan lag 2.
+
+
+```{r}
+model1 <- Arima(train, order = c(0, 1, 1))
+model2 <- Arima(train, order = c(1, 1, 0))
+model3 <- Arima(train, order = c(2, 1, 0))
+model4 <- Arima(train, order = c(1, 1, 1))
+model5 <- Arima(train, order = c(2, 1, 1))
+
+model_auto <- auto.arima(train)
+
+AIC(model1, model2, model3, model4, model5, model_auto)
+```
+
+Berdasarkan tabel perbandingan AIC yang baru, model1 [ARIMA(0,1,1)] memiliki nilai AIC terkecil yaitu 402.3806.
+
+```{r}
+library(lmtest)
+summary(model1)
+coeftest(model1)
+```
+
+
+```{r}
+sisaan <- residuals(model1)
+
+par(mfrow = c(2, 2))
+plot(sisaan, type = "p", main = "Sisaan vs Order")
+abline(h = 0, col = "red")
+qqnorm(sisaan)
+qqline(sisaan, col = "red")
+acf(sisaan, main = "ACF Sisaan")
+pacf(sisaan, main = "PACF Sisaan")
+par(mfrow = c(1, 1))
+```
+
+```{r}
+checkresiduals(model1)
+
+shapiro.test(sisaan)
+```
+
+Hasil uji Ljung-Box menunjukkan p-value sebesar 0,9997 > 0.05, sehingga keputusan tak tolak H0 yang mengindikasikan bahwa sisaan model ARIMA(0,1,1) bersifat bebas dari autokorelasi. Sementara itu, hasil uji Shapiro-Wilk menghasilkan p-value sebesar 4,566 x 10^-14 < 0.05, yang menunjukkan keputusan tolak H0 sehingga sisaan belum memenuhi asumsi berdistribusi normal.
+
+### Pengujian Data Uji
+
+```{r}
+h_test <- length(test)
+ramalan <- forecast(model1, h = h_test)
+
+plot(ramalan, main = "Ramalan ARIMA(0, 1, 1) vs Data Test")
+lines(test, col = "red", lwd = 2)
+legend("topleft", legend = c("Ramalan", "Data Test"), col = c("blue", "red"), lty = 1)
+
+accuracy(ramalan, test)
+```
+
+Hasil visualisasi menunjukkan bahwa garis peramalan model ARIMA(0,1,1) membentuk garis lurus horizontal, namun pergerakan data aktual/test secara umum masih berada di dalam area pita selang kepercayaan 80% dan 95%. Berdasarkan ukuran kebaikan model, diperoleh nilai MAPE sebesar 2,78% pada data training dan 16,41% pada data testing. Nilai MAPE testing yang berada pada rentang 10% hingga 20% menunjukkan bahwa model ARIMA(0,1,1) memiliki tingkat akurasi peramalan yang cukup baik dalam memprediksi harga cabai merah
